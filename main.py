@@ -15,10 +15,12 @@ import threading
 
 import re
 from pathlib import Path
-import shutil 
+import shutil
 
 from window import ROOT
 
+from font import change_font, rotate_font_name, rotate_font_size
+from lang import rotate_language
 
 # Create the Root Window
 root = tk.Tk()
@@ -45,7 +47,7 @@ root.config(bg=ROOT["theme"]["bg"])
 text_area = tk.Text(root)
 text_area.config(wrap="word", undo=True, autoseparators=True, maxundo=-1)
 text_area.config(bg=ROOT["theme"]["bg"], fg=ROOT["theme"]["fg"], foreground=ROOT["theme"]["fg"], insertbackground=ROOT["theme"]["fg"], border=0, insertborderwidth=0, highlightthickness=0)
-text_area.insert("1.0", "我很好，你呢？")
+text_area.insert("1.0", "")
 text_area.grid(row=2, column=1, columnspan=2, pady=4, sticky=tk.NSEW)
 
 scrollbar = tk.Scrollbar(root, command=text_area.yview)
@@ -66,62 +68,67 @@ controls_frame.config(bg=ROOT["theme"]["bg"])
 
 # Record Buttons
 record_buttons_frame = tk.Frame(controls_frame)
-record_buttons_frame.grid(row=0, column=1, sticky=tk.EW, padx=8)
+record_buttons_frame.grid(row=0, column=1, sticky=tk.EW, padx=24)
 record_buttons_frame.config(bg=ROOT["theme"]["bg"])
 
 
 # Listen Buttons
 listen_buttons_frame = tk.Frame(controls_frame)
-listen_buttons_frame.grid(row=0, column=2, sticky=tk.EW, padx=8)
+listen_buttons_frame.grid(row=0, column=2, sticky=tk.EW, padx=24)
 listen_buttons_frame.config(bg=ROOT["theme"]["bg"])
 
 
 # Text Buttons
 text_buttons_frame = tk.Frame(controls_frame)
-text_buttons_frame.grid(row=0, column=3, sticky=tk.EW, padx=8)
+text_buttons_frame.grid(row=0, column=3, sticky=tk.EW, padx=24)
 text_buttons_frame.config(bg=ROOT["theme"]["bg"])
 
 
-from icons import ICONS
+# Language Frame
+language_frame = tk.Frame(controls_frame)
+language_frame.grid(row=0, column=4, sticky=tk.EW, padx=24)
+language_frame.config(bg=ROOT["theme"]["bg"])
 
-# Font Spinbox Selection
-selected_font = tk.StringVar()
+language_string_var = tk.StringVar()
+language_string_var.set(ROOT["language"]["supported"][0])
+language_label = tk.Label(language_frame, textvariable=language_string_var, justify="left", anchor="w")
+language_label.config(bg=ROOT["theme"]["bg"], fg=ROOT["theme"]["fg"])
+language_label.grid(row=0, column=1, sticky=tk.W, padx=4, pady=2)
+language_label.config(font=("Liberation Mono", 12))
 
-font_names_list = ["HanyiSentyTang", "Hanyi Senty Lingfei Scroll", "KaiTi", "Noto Sans CJK SC"]
-font_name_spinbox = tk.Spinbox(controls_frame, textvariable=selected_font, values=font_names_list, command=lambda : change_font(font_name_spinbox.get()))
-font_name_spinbox.config(cursor="arrow", buttoncursor="hand2")
-font_name_spinbox.config(width=24, state="readonly")
-font_name_spinbox.config(font=("Arial", 12))
-font_name_spinbox.config(bg=ROOT["theme"]["bg"], fg=ROOT["theme"]["fg"], border=0, insertborderwidth=0, selectborderwidth=0, highlightthickness=0, buttonbackground=ROOT["theme"]["bg"], disabledbackground=ROOT["theme"]["bg"], readonlybackground=ROOT["theme"]["bg"], relief="flat")
-font_name_spinbox.grid(row=0, column=4, sticky=tk.EW, padx=8)
 
-font_size_spinval = tk.StringVar()
-font_size_spinval.set(48)
-font_size_spinbox = tk.Spinbox(controls_frame, from_=8, to=72, relief="flat", textvariable=font_size_spinval, command=lambda : change_font(selected_font.get()), width=4)
-font_size_spinbox.config(bg=ROOT["theme"]["bg"])
-font_size_spinbox.config(fg=ROOT["theme"]["fg"])
-font_size_spinbox.config(insertbackground=ROOT["theme"]["fg"])
-font_size_spinbox.config(buttonbackground=ROOT["theme"]["bg"])
-font_size_spinbox.config(borderwidth=0, highlightthickness=0)
-font_size_spinbox.config(buttoncursor="hand2")
-font_size_spinbox.config(font=("Arial", 12))
-font_size_spinbox.grid(row=0, column=5, sticky=tk.E, padx=8)
-
+AppState = {
+    "selected": {
+        "font": {
+            "name": 0,
+            "size": 0
+        },
+        "language": {
+            "name": 0
+        }
+    }
+}
 
 # Status Bar
 status_bar_label = tk.Label(root, text="Ready", justify="left", anchor="w", padx=4, pady=2)
 status_bar_label.grid(row=5, column=0, columnspan=4, sticky=tk.EW, padx=2, pady=2)
 status_bar_label.config(bg=ROOT["theme"]["bg"], fg=ROOT["theme"]["fg"])
 
+# Busy Flag
+global busy
+busy = False
+
 
 # Get Frame by Section
 def get_frame_by_section(section):
-    if section == "record":
+    if section == "user":
         return record_buttons_frame
-    elif section == "listen":
+    elif section == "bot":
         return listen_buttons_frame
     elif section == "text":
         return text_buttons_frame
+    elif section == "language":
+        return language_frame
     else:
         return None
 
@@ -136,6 +143,9 @@ for section, section_cfg in BUTTONS.items():
     frame = get_frame_by_section(section)
     buttons[section] = {}
     for label, button_cfg in section_cfg.items():
+        if "enabled" in button_cfg and not button_cfg["enabled"]:
+            continue
+
         button = button_cfg["widget"](frame)
         button.config(cursor="hand2", border=0, highlightthickness=0)
         button.config(bg=ROOT["theme"]["bg"], activebackground=ROOT["theme"]["bg:hover"], highlightbackground=ROOT["theme"]["bg"])
@@ -147,23 +157,10 @@ for section, section_cfg in BUTTONS.items():
 outdir = Path("./out")
 
 
-# Change Font
-def change_font(name):
-    font_size = font_size_spinval.get()
-    status_bar_label.config(text=f"Font set to {name} [{font_size}]")
-    new_font = font.Font(family=name, size=font_size, weight="normal")
-    text_area.config(font=new_font)
-
-
 # Enable Buttons
 def set_all_buttons_enable(value):
-    for section, section_buttons in buttons.items():
-        for button in section_buttons.values():
-            button.config(state=tk.DISABLED if not value else tk.NORMAL)
-
-def set_button_enable(section, button, value):
-    buttons[section][button].config(state=tk.DISABLED if not value else tk.NORMAL)
-
+    global busy
+    busy = not value
 
 # Select All
 def select_all(event=None):
@@ -192,6 +189,9 @@ def _play_audio(filepath):
     
 
 def play_audio(filepath):
+    if busy:
+        return
+    
     set_all_buttons_enable(False)
     status_bar_label.config(text="Playing audio...")
     play_audio_thread = threading.Thread(target=_play_audio, args=(filepath,))
@@ -201,7 +201,7 @@ def play_audio(filepath):
 # Recognize Speech
 def _recognize_speech(audio, recognizer):
     try:
-        text = recognizer.recognize_google(audio, language="zh-cn")
+        text = recognizer.recognize_google(audio, language=language_string_var.get())
         text_area.insert(tk.END, text)
         status_bar_label.config(text="Speech recognized successfully.")
         set_all_buttons_enable(True)
@@ -242,6 +242,9 @@ def _listen_audio():
 
 # Record Audio
 def record_audio():
+    if busy:
+        return
+    
     set_all_buttons_enable(False)
 
     listen_thread = threading.Thread(target=_listen_audio)
@@ -253,19 +256,27 @@ def _generate_speech():
     input_text = text_area.get("1.0", "end-1c") 
     
     if input_text.strip():
-        status_bar_label.config(text="Generating speech...")
         outdir.mkdir(exist_ok=True)
 
-        tts = gTTS(text=input_text, lang="zh-cn")
+        language = language_string_var.get()[:2]
+        lang = language if language != "zh" else language_string_var.get()
+
+        tts = gTTS(text=input_text, lang=lang)
+        status_bar_label.config(text=f"Generating speech [{lang}]...")
         tts.save(outdir / "gen.mp3")
 
-        status_bar_label.config(text="gen Speech saved to file.")
+        status_bar_label.config(text="Speech saved to file.")
+        
+        set_all_buttons_enable(True)
         play_audio(outdir / "gen.mp3")
 
     else:
         status_bar_label.config(text="Please enter some text to speak.")
 
 def generate_audio():
+    if busy:
+        return
+    
     set_all_buttons_enable(False)
 
     generate_speech_thread = threading.Thread(target=_generate_speech)
@@ -298,19 +309,29 @@ def save(source, extension, filetypes):
     else:
         status_bar_label.config(text="Save operation canceled.")
 
-
 # Connect Buttons
-buttons["record"]["record"].config(command=lambda : record_audio())
-buttons["record"]["play"].config(command=lambda : play_audio(outdir / "rec.wav"))
+# buttons["record"]["record"].config(command=lambda : record_audio())
+# buttons["record"]["play"].config(command=lambda : play_audio(outdir / "rec.wav"))
 
-buttons["listen"]["record"].config(command=lambda : generate_audio())
-buttons["listen"]["play"].config(command=lambda : play_audio(outdir / "gen.mp3"))
+# buttons["listen"]["record"].config(command=lambda : generate_audio())
+# buttons["listen"]["play"].config(command=lambda : play_audio(outdir / "gen.mp3"))
 
-buttons["text"]["save"].config(command=lambda : save(outdir / "txt.txt", ".txt", [("Text files", "*.txt")]))
+# buttons["text"]["save"].config(command=lambda : save(outdir / "txt.txt", ".txt", [("Text files", "*.txt")]))
 
+# buttons["user"]["microphone-outline"].config(command=lambda : record_audio())
+buttons["user"]["microphone"].config(command=lambda : record_audio())
+buttons["user"]["player-play-outline"].config(command=lambda : play_audio(outdir / "rec.wav"))
+
+buttons["bot"]["message-chatbot"].config(command=lambda : generate_audio())
+buttons["bot"]["player-play"].config(command=lambda : play_audio(outdir / "gen.mp3"))
+
+buttons["text"]["text-size"].config(command=lambda : rotate_font_size(AppState["selected"]["font"], status_bar_label, text_area))
+buttons["text"]["typography"].config(command=lambda : rotate_font_name(AppState["selected"]["font"], status_bar_label, text_area))
+
+buttons["language"]["language"].config(command=lambda : rotate_language(AppState["selected"]["language"], language_string_var, status_bar_label))
 
 # Initial Font
-change_font(selected_font.get())
+change_font(AppState["selected"]["font"], status_bar_label, text_area)
 
 
 # Key Bindings
