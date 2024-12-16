@@ -14,26 +14,31 @@ def buttons_gridconfig(window: Window, state: State):
             window.buttons[section] = {}
             for label, button_builder in section_cfg.items():
                 button = button_builder(frame, state)
-                button.widget.grid(row=button.grid[0], column=button.grid[1], padx=8)
-                button.widget.config(cursor="hand2")
-                button.widget.config(bg=CONFIG.theme.bg)
-                button.widget.config(activebackground=CONFIG.theme.bghover)
-                button.widget.config(highlightbackground=CONFIG.theme.bg)
-                button.widget.config(border=0)
-                button.widget.config(highlightthickness=0)
-                window.buttons[section][label] = button
+                if button.enabled:
+                    button.widget.grid(row=button.grid[0], column=button.grid[1], padx=8)
+                    button.widget.config(cursor="hand2")
+                    button.widget.config(bg=CONFIG.theme.bg)
+                    button.widget.config(activebackground=CONFIG.theme.bghover)
+                    button.widget.config(highlightbackground=CONFIG.theme.bg)
+                    button.widget.config(border=0)
+                    button.widget.config(highlightthickness=0)
+                    window.buttons[section][label] = button
 
 class Button:
     ready: ImageTk.PhotoImage
     busy: ImageTk.PhotoImage
+
+    enabled: bool
     
     grid: tuple
 
     widget: tk.Button
 
-    def __init__(self, frame, grid: tuple, state: State, ready: str, busy: str):
+    def __init__(self, frame, grid: tuple, state: State, ready: str, busy: str, enabled: bool = True):
         self.ready = ICONS[ready]
         self.busy = ICONS[busy]
+
+        self.enabled = enabled
         
         self.grid = grid
                                                                               
@@ -76,7 +81,7 @@ BUTTONS = {
         "folder": lambda frame, state: Button(frame, (0,0), state, "folder", "folder-disabled"),
     },
     "help": {
-        "busy": lambda frame, state: Button(frame, (0,0), state, "hourglass", "hourglass-busy"),
-        "help": lambda frame, state: Button(frame, (0,1), state, "help-square-rounded", "help-square-rounded"),
+        "busy": lambda frame, state: Button(frame, (0,0), state, "hourglass", "hourglass-busy", False),
+        "help": lambda frame, state: Button(frame, (0,1), state, "help-square-rounded", "help-square-rounded", False),
     }
 }

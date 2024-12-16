@@ -68,7 +68,4 @@ window.buttons["text"]["text-size"].widget.config(
 window.buttons["text"]["typography"].widget.config(
     command=lambda : font_rotatename(state.font, window.statuslabel, window.textarea))
 
-window.buttons["help"]["busy"].widget.config(
-    command=lambda : setbusy(state, not state.busy, window.buttons, window.statuslabel))
-
 window.root.mainloop()
